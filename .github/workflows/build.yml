@@ -15,32 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # ─────────── Linux ───────────
-          - os: ubuntu-latest
-            platform: linux/amd64
-            wails_build_param_name: shotgun-code-linux-amd64 # Для -o в Wails
-            package_wails_action: false
-            final_artifact_filename_on_runner: shotgun-code-linux-amd64
-            upload_artifact_as_name: shotgun_code-linux-amd64
-
-          # ────────── Windows ──────────
-          - os: windows-latest
-            platform: windows/amd64
-            wails_build_param_name: shotgun-code-windows-amd64.exe # Для -o в Wails
-            package_wails_action: false
-            final_artifact_filename_on_runner: shotgun-code-windows-amd64.exe
-            upload_artifact_as_name: shotgun_code-windows-amd64
-
-          # ─────────── macOS arm64 ───────────
-          - os: macos-latest
-            platform: darwin/arm64
-            wails_build_param_name: shotgun-code # Имя .app бандла и для -o
-            package_wails_action: true
-            # wails-build-action создаст shotgun-code.app.zip
-            # Мы его переименуем в final_artifact_filename_on_runner
-            final_artifact_filename_on_runner: shotgun-code-darwin-arm64.app.zip
-            upload_artifact_as_name: shotgun_code-darwin-arm64
+        include:        
 
           # ─────────── macOS amd64 ───────────
           - os: macos-latest
