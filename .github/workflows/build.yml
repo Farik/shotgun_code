@@ -40,6 +40,14 @@ jobs:
             package: true
             artifact_path: build/bin/shotgun-code.app.zip
 
+          # ─────────── macOS ───────────
+          - os: macos-latest
+            platform: darwin/amd64	
+            build_name: shotgun-code                # .app
+            artifact_name: shotgun_code-darwin-amd64
+            package: true
+            artifact_path: build/bin/shotgun-code-amd64.app.zip   
+
     runs-on: ${{ matrix.os }}
 
     steps:
