@@ -1,10 +1,10 @@
-name: Cross‑platform Build + Release — Shotgun Code
+name: Cross‑platform Build + Release — Shotgun Code
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write        
+  contents: write
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
@@ -19,34 +19,38 @@ jobs:
           # ─────────── Linux ───────────
           - os: ubuntu-latest
             platform: linux/amd64
-            build_name: shotgun-code-linux-amd64
-            artifact_name: shotgun_code-linux-amd64
-            package: false
-            artifact_path: build/bin/shotgun-code-linux-amd64
+            wails_build_param_name: shotgun-code-linux-amd64 # Для -o в Wails
+            package_wails_action: false
+            final_artifact_filename_on_runner: shotgun-code-linux-amd64
+            upload_artifact_as_name: shotgun_code-linux-amd64
 
           # ────────── Windows ──────────
           - os: windows-latest
             platform: windows/amd64
-            build_name: shotgun-code-windows-amd64.exe
-            artifact_name: shotgun_code-windows-amd64
-            package: false
-            artifact_path: build/bin/shotgun-code-windows-amd64.exe
+            wails_build_param_name: shotgun-code-windows-amd64.exe # Для -o в Wails
+            package_wails_action: false
+            final_artifact_filename_on_runner: shotgun-code-windows-amd64.exe
+            upload_artifact_as_name: shotgun_code-windows-amd64
 
-          # ─────────── macOS ───────────
+          # ─────────── macOS arm64 ───────────
           - os: macos-latest
             platform: darwin/arm64
-            build_name: shotgun-code                # .app
-            artifact_name: shotgun_code-darwin-arm64
-            package: true
-            artifact_path: build/bin/shotgun-code.app.zip
+            wails_build_param_name: shotgun-code # Имя .app бандла и для -o
+            package_wails_action: true
+            # wails-build-action создаст shotgun-code.app.zip
+            # Мы его переименуем в final_artifact_filename_on_runner
+            final_artifact_filename_on_runner: shotgun-code-darwin-arm64.app.zip
+            upload_artifact_as_name: shotgun_code-darwin-arm64
 
           # ─────────── macOS amd64 ───────────
           - os: macos-latest
-            platform: darwin/amd64	
-            build_name: shotgun-code              
-            artifact_name: shotgun_code-darwin-amd64 
-            package: true
-            artifact_path: build/bin/shotgun-code.app.zip 
+            platform: darwin/amd64
+            wails_build_param_name: shotgun-code # Имя .app бандла и для -o
+            package_wails_action: true
+            # wails-build-action создаст shotgun-code.app.zip
+            # Мы его переименуем в final_artifact_filename_on_runner
+            final_artifact_filename_on_runner: shotgun-code-darwin-amd64.app.zip
+            upload_artifact_as_name: shotgun_code-darwin-amd64
 
     runs-on: ${{ matrix.os }}
 
@@ -60,17 +64,41 @@ jobs:
       - name: Build Wails app (${{ matrix.platform }})
         uses: dAppServer/wails-build-action@main
         with:
-          build-name:     ${{ matrix.build_name }}
+          build-name:     ${{ matrix.wails_build_param_name }}
           build-platform: ${{ matrix.platform }}
-          go-version:     '1.24'
-          package:        ${{ matrix.package }}
+          go-version:     '1.24' # Убедитесь, что это правильная версия, в логах было 1.24.3
+          package:        ${{ matrix.package_wails_action }}
+
+      - name: Prepare artifact path and rename if macOS
+        id: prepare_artifact_path
+        run: |
+          if [[ "${{ matrix.package_wails_action }}" == "true" && "${{ runner.os }}" == "macOS" ]]; then
+            # wails-build-action создает zip на основе 'build-name', т.е. ${{ matrix.wails_build_param_name }}.app.zip
+            SOURCE_ZIP_PATH="build/bin/${{ matrix.wails_build_param_name }}.app.zip"
+            DEST_FULL_PATH="build/bin/${{ matrix.final_artifact_filename_on_runner }}"
+            echo "Attempting to rename '$SOURCE_ZIP_PATH' to '$DEST_FULL_PATH'"
+            if [[ -f "$SOURCE_ZIP_PATH" ]]; then
+              mv "$SOURCE_ZIP_PATH" "$DEST_FULL_PATH"
+              echo "Successfully renamed to '$DEST_FULL_PATH'"
+              echo "artifact_upload_path=$DEST_FULL_PATH" >> $GITHUB_OUTPUT
+            else
+              echo "Error: Source ZIP file '$SOURCE_ZIP_PATH' not found!"
+              exit 1
+            fi
+          else
+            # Для Linux/Windows, путь это build/bin/имя_файла
+            FINAL_PATH="build/bin/${{ matrix.final_artifact_filename_on_runner }}"
+            echo "artifact_upload_path=$FINAL_PATH" >> $GITHUB_OUTPUT
+            echo "Path for non-macOS or non-package: $FINAL_PATH"
+          fi
+        shell: bash
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
-          if-no-files-found: error   
+          name: ${{ matrix.upload_artifact_as_name }}
+          path: ${{ steps.prepare_artifact_path.outputs.artifact_upload_path }}
+          if-no-files-found: error
 
 # ─────────────────────── RELEASE ────────────────────────
   release:
@@ -81,9 +109,12 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: shotgun_code-*      
+          pattern: shotgun_code-*
           path: release-assets
-          fail_on_no_artifact: true
+          fail_on_no_artifact: true # Это правильно
+
+      - name: List downloaded files # Для отладки
+        run: ls -R release-assets
 
       - name: Prepare tag & release metadata
         id: prep
@@ -100,15 +131,14 @@ jobs:
           body: |
             🔨 Automatic packaging от commit ${{ github.sha }}
             Packages:
-            • Linux (amd64)  
-            • Windows (amd64)  
-            • macOS (Apple Silicon)  
-            • macOS (Intel)  
-            Created with GitHub Actions.
+            • Linux (amd64)
+            • Windows (amd64)
+            • macOS (Apple Silicon)
+            • macOS (Intel)
+            Created with GitHub Actions.
           draft: false
           prerelease: false
-          
-          files: release-assets/**/*
+          files: release-assets/**/* # Убедитесь, что структура файлов в release-assets соответствует этому паттерну
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
