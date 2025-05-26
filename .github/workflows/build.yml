@@ -43,7 +43,7 @@ jobs:
           # ─────────── macOS ───────────
           - os: macos-latest
             platform: darwin/amd64	
-            build_name: shotgun-code                # .app
+            build_name: shotgun-code-amd64                # .app
             artifact_name: shotgun_code-darwin-amd64
             package: true
             artifact_path: build/bin/shotgun-code-amd64.app.zip   
@@ -103,6 +103,7 @@ jobs:
             • Linux (amd64)  
             • Windows (amd64)  
             • macOS (Apple Silicon)  
+            • macOS (Intel)  
             Created with GitHub Actions.
           draft: false
           prerelease: false
